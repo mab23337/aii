@@ -21,6 +21,7 @@ import colorsys
 from collections import Counter
 import re
 import requests as req_lib
+from huggingface_hub import InferenceClient
 
 # Configure logging
 logging.basicConfig(
@@ -32,11 +33,8 @@ logger = logging.getLogger(__name__)
 
 # HF Inference API config
 HF_API_TOKEN = os.environ.get('HF_API_TOKEN', '')
-HF_HEADERS   = {"Authorization": f"Bearer {HF_API_TOKEN}"}
-# New HF Inference API URLs (v2 router — old /models/ endpoints return 410)
-HF_CAPTION_URL = "https://router.huggingface.co/hf-inference/models/Salesforce/blip-image-captioning-base"
-HF_DETECT_URL  = "https://router.huggingface.co/hf-inference/models/facebook/detr-resnet-50"
 HAS_API = bool(HF_API_TOKEN)
+hf_client = InferenceClient(provider="hf-inference", api_key=HF_API_TOKEN) if HAS_API else None
 
 if not HAS_API:
     logger.warning("HF_API_TOKEN not set — AI features will be disabled.")
@@ -106,72 +104,49 @@ def get_file_hash(file_path):
 
 # ── HF Inference API ──────────────────────────────────────────────────────────
 
-def _hf_post(url, image_bytes, retries=4):
-    """POST image bytes to HF Inference API.
-    Handles both HTTP 503 and JSON loading responses from cold-start models.
-    Sends correct Content-Type so HF knows this is raw image bytes.
-    """
-    headers = {**HF_HEADERS, "Content-Type": "application/octet-stream"}
-    for attempt in range(retries):
-        try:
-            resp = req_lib.post(url, headers=headers, data=image_bytes, timeout=60)
-            logger.info(f"HF response {url.split('/')[-1]}: status={resp.status_code}")
-
-            # 503 = model not loaded yet (HTTP level)
-            if resp.status_code == 503:
-                wait = 20
-                logger.info(f"HF 503 - model loading, waiting {wait}s (attempt {attempt+1}/{retries})")
-                time.sleep(wait)
-                continue
-
-            resp.raise_for_status()
-            result = resp.json()
-
-            # HF also returns 200 with a loading body: {"error": "...", "estimated_time": N}
-            if isinstance(result, dict) and 'error' in result:
-                estimated = result.get('estimated_time', 20)
-                logger.info(f"HF model loading: {result.get('error')} — waiting {estimated}s")
-                time.sleep(min(float(estimated) + 5, 30))
-                continue
-
-            return result
-
-        except Exception as e:
-            logger.error(f"HF API error attempt {attempt+1}/{retries}: {e}")
-            if attempt < retries - 1:
-                time.sleep(5)
-    return None
-
 def generate_caption(image_bytes):
     if not HAS_API:
         return "AI unavailable — HF_API_TOKEN not configured."
-    result = _hf_post(HF_CAPTION_URL, image_bytes)
-    logger.info(f"Caption result: {result}")
-    if isinstance(result, list) and result:
-        return result[0].get('generated_text', 'No caption generated.')
-    return 'Could not generate caption.'
+    try:
+        result = hf_client.image_to_text(image_bytes, model="Salesforce/blip-image-captioning-base")
+        logger.info(f"Caption result: {result}")
+        # result is a string directly from InferenceClient
+        if isinstance(result, str) and result:
+            return result
+        # or a list of dicts
+        if isinstance(result, list) and result:
+            return result[0].get('generated_text', 'No caption generated.')
+        return 'No caption generated.'
+    except Exception as e:
+        logger.error(f"Caption error: {e}")
+        return 'Could not generate caption.'
 
 def detect_objects(image_bytes):
     if not HAS_API:
         return []
-    result = _hf_post(HF_DETECT_URL, image_bytes)
-    logger.info(f"Detection result type: {type(result)}, len: {len(result) if isinstance(result, list) else 'N/A'}")
-    if not isinstance(result, list):
-        logger.warning(f"Unexpected detection response: {result}")
+    try:
+        result = hf_client.object_detection(image_bytes, model="facebook/detr-resnet-50")
+        logger.info(f"Detection result: {result}")
+        objects = []
+        for item in result:
+            score = getattr(item, 'score', None) or item.get('score', 0) if isinstance(item, dict) else item.score
+            label = getattr(item, 'label', None) or item.get('label', 'unknown') if isinstance(item, dict) else item.label
+            box   = getattr(item, 'box',   None) or item.get('box',   {})         if isinstance(item, dict) else item.box
+            if score < 0.5:
+                continue
+            xmin = getattr(box, 'xmin', None) or (box.get('xmin', 0) if isinstance(box, dict) else 0)
+            ymin = getattr(box, 'ymin', None) or (box.get('ymin', 0) if isinstance(box, dict) else 0)
+            xmax = getattr(box, 'xmax', None) or (box.get('xmax', 0) if isinstance(box, dict) else 0)
+            ymax = getattr(box, 'ymax', None) or (box.get('ymax', 0) if isinstance(box, dict) else 0)
+            objects.append({
+                'label':      label,
+                'confidence': round(float(score), 2),
+                'box':        [int(xmin), int(ymin), int(xmax), int(ymax)]
+            })
+        return objects[:10]
+    except Exception as e:
+        logger.error(f"Detection error: {e}")
         return []
-    objects = []
-    for item in result:
-        score = item.get('score', 0)
-        if score < 0.5:
-            continue
-        b = item.get('box', {})
-        objects.append({
-            'label':      item.get('label', 'unknown'),
-            'confidence': round(score, 2),
-            'box':        [int(b.get('xmin', 0)), int(b.get('ymin', 0)),
-                           int(b.get('xmax', 0)), int(b.get('ymax', 0))]
-        })
-    return objects[:10]
 
 
 # ── Local image processing (lightweight, no torch) ────────────────────────────
