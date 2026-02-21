@@ -105,15 +105,14 @@ def get_file_hash(file_path):
 
 # ── HF Inference API ──────────────────────────────────────────────────────────
 
-def _hf_post(url, image_path, retries=3):
-    with open(image_path, 'rb') as f:
-        image_bytes = f.read()
+def _hf_post(url, image_bytes, retries=3):
+    """POST image bytes to HF Inference API with retry on 503 (model cold start)."""
     for attempt in range(retries):
         try:
             resp = req_lib.post(url, headers=HF_HEADERS, data=image_bytes, timeout=30)
             if resp.status_code == 503:
                 logger.info(f"HF model warming up ({url}), retry {attempt+1}/{retries}")
-                time.sleep(10)
+                time.sleep(15)
                 continue
             resp.raise_for_status()
             return resp.json()
@@ -123,19 +122,21 @@ def _hf_post(url, image_path, retries=3):
                 return None
     return None
 
-def generate_caption(image_path):
+def generate_caption(image_bytes):
     if not HAS_API:
         return "AI unavailable — HF_API_TOKEN not configured."
-    result = _hf_post(HF_CAPTION_URL, image_path)
+    result = _hf_post(HF_CAPTION_URL, image_bytes)
     if isinstance(result, list) and result:
         return result[0].get('generated_text', 'No caption generated.')
+    logger.warning(f"Unexpected caption response: {result}")
     return 'Could not generate caption.'
 
-def detect_objects(image_path):
+def detect_objects(image_bytes):
     if not HAS_API:
         return []
-    result = _hf_post(HF_DETECT_URL, image_path)
+    result = _hf_post(HF_DETECT_URL, image_bytes)
     if not isinstance(result, list):
+        logger.warning(f"Unexpected detection response: {result}")
         return []
     objects = []
     for item in result:
@@ -278,11 +279,17 @@ def upload_file():
 
         file_hash = get_file_hash(filepath)
 
-        # Run caption + detection in parallel
+        # Read image bytes once — used for HF API calls AND base64 response.
+        # Must happen before finally block deletes the file.
+        with open(filepath, 'rb') as f:
+            image_bytes = f.read()
+        original_image = base64.b64encode(image_bytes).decode('utf-8')
+
+        # Run caption + detection in parallel, passing bytes (not file path)
         caption_box = [None]
         objects_box = [[]]
-        def do_caption(): caption_box[0] = generate_caption(filepath)
-        def do_detect():  objects_box[0] = detect_objects(filepath)
+        def do_caption(): caption_box[0] = generate_caption(image_bytes)
+        def do_detect():  objects_box[0] = detect_objects(image_bytes)
         t1 = threading.Thread(target=do_caption)
         t2 = threading.Thread(target=do_detect)
         t1.start(); t2.start()
@@ -293,9 +300,6 @@ def upload_file():
         colors  = extract_dominant_colors(filepath)
         ocr     = perform_ocr(filepath)
         annotated_image = draw_bounding_boxes(filepath, objects)
-
-        with open(filepath, 'rb') as f:
-            original_image = base64.b64encode(f.read()).decode('utf-8')
 
         processing_time = round(time.time() - start_time, 2)
         save_to_history(filename, processing_time, caption, objects,
