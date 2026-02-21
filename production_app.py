@@ -105,36 +105,56 @@ def get_file_hash(file_path):
 
 # ── HF Inference API ──────────────────────────────────────────────────────────
 
-def _hf_post(url, image_bytes, retries=3):
-    """POST image bytes to HF Inference API with retry on 503 (model cold start)."""
+def _hf_post(url, image_bytes, retries=4):
+    """POST image bytes to HF Inference API.
+    Handles both HTTP 503 and JSON loading responses from cold-start models.
+    Sends correct Content-Type so HF knows this is raw image bytes.
+    """
+    headers = {**HF_HEADERS, "Content-Type": "application/octet-stream"}
     for attempt in range(retries):
         try:
-            resp = req_lib.post(url, headers=HF_HEADERS, data=image_bytes, timeout=30)
+            resp = req_lib.post(url, headers=headers, data=image_bytes, timeout=60)
+            logger.info(f"HF response {url.split('/')[-1]}: status={resp.status_code}")
+
+            # 503 = model not loaded yet (HTTP level)
             if resp.status_code == 503:
-                logger.info(f"HF model warming up ({url}), retry {attempt+1}/{retries}")
-                time.sleep(15)
+                wait = 20
+                logger.info(f"HF 503 - model loading, waiting {wait}s (attempt {attempt+1}/{retries})")
+                time.sleep(wait)
                 continue
+
             resp.raise_for_status()
-            return resp.json()
+            result = resp.json()
+
+            # HF also returns 200 with a loading body: {"error": "...", "estimated_time": N}
+            if isinstance(result, dict) and 'error' in result:
+                estimated = result.get('estimated_time', 20)
+                logger.info(f"HF model loading: {result.get('error')} — waiting {estimated}s")
+                time.sleep(min(float(estimated) + 5, 30))
+                continue
+
+            return result
+
         except Exception as e:
-            logger.error(f"HF API error on attempt {attempt+1}: {e}")
-            if attempt == retries - 1:
-                return None
+            logger.error(f"HF API error attempt {attempt+1}/{retries}: {e}")
+            if attempt < retries - 1:
+                time.sleep(5)
     return None
 
 def generate_caption(image_bytes):
     if not HAS_API:
         return "AI unavailable — HF_API_TOKEN not configured."
     result = _hf_post(HF_CAPTION_URL, image_bytes)
+    logger.info(f"Caption result: {result}")
     if isinstance(result, list) and result:
         return result[0].get('generated_text', 'No caption generated.')
-    logger.warning(f"Unexpected caption response: {result}")
     return 'Could not generate caption.'
 
 def detect_objects(image_bytes):
     if not HAS_API:
         return []
     result = _hf_post(HF_DETECT_URL, image_bytes)
+    logger.info(f"Detection result type: {type(result)}, len: {len(result) if isinstance(result, list) else 'N/A'}")
     if not isinstance(result, list):
         logger.warning(f"Unexpected detection response: {result}")
         return []
