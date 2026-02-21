@@ -108,44 +108,57 @@ def generate_caption(image_bytes):
     if not HAS_API:
         return "AI unavailable — HF_API_TOKEN not configured."
     try:
-        result = hf_client.image_to_text(image_bytes, model="Salesforce/blip-image-captioning-base")
-        logger.info(f"Caption result: {result}")
-        # result is a string directly from InferenceClient
-        if isinstance(result, str) and result:
-            return result
-        # or a list of dicts
+        # Pass as PIL Image to avoid bytes encoding issues
+        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        result = hf_client.image_to_text(img, model="Salesforce/blip-image-captioning-base")
+        logger.info(f"Caption result: {repr(result)}")
+        if isinstance(result, str) and result.strip():
+            return result.strip()
         if isinstance(result, list) and result:
-            return result[0].get('generated_text', 'No caption generated.')
+            first = result[0]
+            return first.get('generated_text', '') if isinstance(first, dict) else str(first)
         return 'No caption generated.'
     except Exception as e:
-        logger.error(f"Caption error: {e}")
+        logger.error(f"Caption error: {e}", exc_info=True)
         return 'Could not generate caption.'
 
 def detect_objects(image_bytes):
     if not HAS_API:
         return []
     try:
-        result = hf_client.object_detection(image_bytes, model="facebook/detr-resnet-50")
-        logger.info(f"Detection result: {result}")
+        # Pass as PIL Image to avoid bytes encoding issues
+        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        result = hf_client.object_detection(img, model="facebook/detr-resnet-50")
+        logger.info(f"Detection result: {repr(result)}")
         objects = []
         for item in result:
-            score = getattr(item, 'score', None) or item.get('score', 0) if isinstance(item, dict) else item.score
-            label = getattr(item, 'label', None) or item.get('label', 'unknown') if isinstance(item, dict) else item.label
-            box   = getattr(item, 'box',   None) or item.get('box',   {})         if isinstance(item, dict) else item.box
-            if score < 0.5:
+            try:
+                # InferenceClient returns ObjectDetectionOutput dataclass objects
+                if hasattr(item, 'score'):
+                    score = item.score
+                    label = item.label
+                    box   = item.box
+                    xmin, ymin = box.xmin, box.ymin
+                    xmax, ymax = box.xmax, box.ymax
+                else:
+                    score = item['score']
+                    label = item['label']
+                    box   = item['box']
+                    xmin, ymin = box['xmin'], box['ymin']
+                    xmax, ymax = box['xmax'], box['ymax']
+                if float(score) < 0.5:
+                    continue
+                objects.append({
+                    'label':      str(label),
+                    'confidence': round(float(score), 2),
+                    'box':        [int(xmin), int(ymin), int(xmax), int(ymax)]
+                })
+            except Exception as item_err:
+                logger.warning(f"Skipping detection item {item}: {item_err}")
                 continue
-            xmin = getattr(box, 'xmin', None) or (box.get('xmin', 0) if isinstance(box, dict) else 0)
-            ymin = getattr(box, 'ymin', None) or (box.get('ymin', 0) if isinstance(box, dict) else 0)
-            xmax = getattr(box, 'xmax', None) or (box.get('xmax', 0) if isinstance(box, dict) else 0)
-            ymax = getattr(box, 'ymax', None) or (box.get('ymax', 0) if isinstance(box, dict) else 0)
-            objects.append({
-                'label':      label,
-                'confidence': round(float(score), 2),
-                'box':        [int(xmin), int(ymin), int(xmax), int(ymax)]
-            })
         return objects[:10]
     except Exception as e:
-        logger.error(f"Detection error: {e}")
+        logger.error(f"Detection error: {e}", exc_info=True)
         return []
 
 
