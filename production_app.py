@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 HF_API_TOKEN = os.environ.get('HF_API_TOKEN', '')
 HAS_API = bool(HF_API_TOKEN)
 hf_client    = InferenceClient(provider="hf-inference", api_key=HF_API_TOKEN) if HAS_API else None
-openai_client = OpenAI(base_url="https://router.huggingface.co/v1", api_key=HF_API_TOKEN) if HAS_API else None
+openai_client = OpenAI(base_url="https://router.huggingface.co/hf-inference/v1", api_key=HF_API_TOKEN) if HAS_API else None
 
 if not HAS_API:
     logger.warning("HF_API_TOKEN not set — AI features will be disabled.")
@@ -125,7 +125,7 @@ def generate_caption(image_bytes):
         small = _resize_for_api(image_bytes, max_side=800)
         b64 = base64.b64encode(small).decode()
         completion = openai_client.chat.completions.create(
-            model="meta-llama/Llama-3.2-11B-Vision-Instruct:hf-inference",
+            model="meta-llama/Llama-3.2-11B-Vision-Instruct",
             messages=[{
                 "role": "user",
                 "content": [
