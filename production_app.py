@@ -21,7 +21,6 @@ import colorsys
 from collections import Counter
 import re
 import requests as req_lib
-from huggingface_hub import InferenceClient
 from openai import OpenAI
 
 # Configure logging
@@ -35,7 +34,6 @@ logger = logging.getLogger(__name__)
 # HF Inference API config
 HF_API_TOKEN = os.environ.get('HF_API_TOKEN', '')
 HAS_API = bool(HF_API_TOKEN)
-hf_client     = InferenceClient(provider="hf-inference", api_key=HF_API_TOKEN) if HAS_API else None
 openai_client = OpenAI(base_url="https://router.huggingface.co/v1", api_key=HF_API_TOKEN) if HAS_API else None
 
 if not HAS_API:
@@ -117,10 +115,10 @@ def _resize_for_api(image_bytes, max_side=800):
     img.save(buf, format="JPEG", quality=85)
     return buf.getvalue()
 
-def generate_caption(image_bytes):
-    """Caption via OpenAI-compatible vision LLM on HF router."""
+def analyze_image(image_bytes):
+    """Single LLM call returns both caption and object list — no COCO category limits."""
     if not HAS_API:
-        return "AI unavailable — HF_API_TOKEN not configured."
+        return "AI unavailable — HF_API_TOKEN not configured.", []
     try:
         small = _resize_for_api(image_bytes, max_side=800)
         b64 = base64.b64encode(small).decode()
@@ -130,50 +128,44 @@ def generate_caption(image_bytes):
                 "role": "user",
                 "content": [
                     {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
-                    {"type": "text", "text": "Describe this image in one concise sentence."}
+                    {"type": "text", "text": (
+                        "Analyze this image and respond in this exact format with no extra text:\n"
+                        "CAPTION: <one sentence description>\n"
+                        "OBJECTS: <comma-separated list of objects visible in the image>"
+                    )}
                 ]
             }],
-            max_tokens=80
+            max_tokens=200
         )
-        caption = completion.choices[0].message.content.strip()
-        logger.info(f"Caption: {caption}")
-        return caption
+        text = completion.choices[0].message.content.strip()
+        logger.info(f"LLM response: {text}")
+
+        caption = "No caption generated."
+        objects = []
+
+        for line in text.splitlines():
+            if line.startswith("CAPTION:"):
+                caption = line[len("CAPTION:"):].strip()
+            elif line.startswith("OBJECTS:"):
+                raw = line[len("OBJECTS:"):].strip()
+                objects = [
+                    {"label": o.strip(), "confidence": 1.0, "box": [0, 0, 0, 0]}
+                    for o in raw.split(",")
+                    if o.strip()
+                ][:10]
+
+        return caption, objects
     except Exception as e:
-        logger.error(f"Caption error: {e}", exc_info=True)
-        return "Could not generate caption."
+        logger.error(f"analyze_image error: {e}", exc_info=True)
+        return "Could not analyze image.", []
+
+def generate_caption(image_bytes):
+    caption, _ = analyze_image(image_bytes)
+    return caption
 
 def detect_objects(image_bytes):
-    """Object detection via InferenceClient — save to temp file to avoid mime-type bug."""
-    if not HAS_API:
-        return []
-    tmp_path = None
-    try:
-        # InferenceClient needs a file path to detect mime type; raw bytes trigger a bug
-        small = _resize_for_api(image_bytes, max_side=800)
-        import tempfile
-        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-            tmp.write(small)
-            tmp_path = tmp.name
-        result = hf_client.object_detection(tmp_path, model="facebook/detr-resnet-50")
-        logger.info(f"Detection: {result}")
-        objects = []
-        for item in result:
-            score = float(item.score)
-            if score < 0.5:
-                continue
-            box = item.box
-            objects.append({
-                "label":      str(item.label),
-                "confidence": round(score, 2),
-                "box":        [int(box.xmin), int(box.ymin), int(box.xmax), int(box.ymax)]
-            })
-        return objects[:10]
-    except Exception as e:
-        logger.error(f"Detection error: {e}", exc_info=True)
-        return []
-    finally:
-        if tmp_path and os.path.exists(tmp_path):
-            os.remove(tmp_path)
+    _, objects = analyze_image(image_bytes)
+    return objects
 
 
 # ── Local image processing (lightweight, no torch) ────────────────────────────
@@ -309,17 +301,8 @@ def upload_file():
         original_image = base64.b64encode(image_bytes).decode('utf-8')
 
         # Run caption + detection in parallel, passing bytes (not file path)
-        caption_box = [None]
-        objects_box = [[]]
-        def do_caption(): caption_box[0] = generate_caption(image_bytes)
-        def do_detect():  objects_box[0] = detect_objects(image_bytes)
-        t1 = threading.Thread(target=do_caption)
-        t2 = threading.Thread(target=do_detect)
-        t1.start(); t2.start()
-        t1.join();  t2.join()
-
-        caption = caption_box[0]
-        objects = objects_box[0]
+        # Single LLM call returns both caption and objects
+        caption, objects = analyze_image(image_bytes)
         colors  = extract_dominant_colors(filepath)
         ocr     = perform_ocr(filepath)
         annotated_image = draw_bounding_boxes(filepath, objects)
