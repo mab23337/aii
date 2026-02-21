@@ -106,20 +106,30 @@ def get_file_hash(file_path):
 
 # ── HF Inference API ──────────────────────────────────────────────────────────
 
+def _resize_for_api(image_bytes, max_side=800):
+    """Resize image so longest side <= max_side, return as JPEG bytes."""
+    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    w, h = img.size
+    if max(w, h) > max_side:
+        scale = max_side / max(w, h)
+        img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=85)
+    return buf.getvalue()
+
 def generate_caption(image_bytes):
     """Caption via HF router vision LLM (OpenAI-compatible chat endpoint)."""
     if not HAS_API:
         return "AI unavailable — HF_API_TOKEN not configured."
     try:
-        b64 = base64.b64encode(image_bytes).decode()
-        mime = "image/png" if image_bytes[:8] == b'\x89PNG\r\n\x1a\n' else "image/jpeg"
-        # meta-llama/Llama-3.2-11B-Vision-Instruct supports image-text-to-text on hf-inference
+        small = _resize_for_api(image_bytes, max_side=800)
+        b64 = base64.b64encode(small).decode()
         completion = openai_client.chat.completions.create(
             model="meta-llama/Llama-3.2-11B-Vision-Instruct:hf-inference",
             messages=[{
                 "role": "user",
                 "content": [
-                    {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
                     {"type": "text", "text": "Describe this image in one concise sentence."}
                 ]
             }],
@@ -133,11 +143,18 @@ def generate_caption(image_bytes):
         return "Could not generate caption."
 
 def detect_objects(image_bytes):
-    """Object detection via InferenceClient hf-inference provider."""
+    """Object detection via InferenceClient — save to temp file to avoid mime-type bug."""
     if not HAS_API:
         return []
+    tmp_path = None
     try:
-        result = hf_client.object_detection(image_bytes, model="facebook/detr-resnet-50")
+        # InferenceClient needs a file path to detect mime type; raw bytes trigger a bug
+        small = _resize_for_api(image_bytes, max_side=800)
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+            tmp.write(small)
+            tmp_path = tmp.name
+        result = hf_client.object_detection(tmp_path, model="facebook/detr-resnet-50")
         logger.info(f"Detection: {result}")
         objects = []
         for item in result:
@@ -154,6 +171,9 @@ def detect_objects(image_bytes):
     except Exception as e:
         logger.error(f"Detection error: {e}", exc_info=True)
         return []
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.remove(tmp_path)
 
 
 # ── Local image processing (lightweight, no torch) ────────────────────────────
