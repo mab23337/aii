@@ -21,6 +21,8 @@ import colorsys
 from collections import Counter
 import re
 import requests as req_lib
+from huggingface_hub import InferenceClient
+from openai import OpenAI
 
 # Configure logging
 logging.basicConfig(
@@ -33,7 +35,8 @@ logger = logging.getLogger(__name__)
 # HF Inference API config
 HF_API_TOKEN = os.environ.get('HF_API_TOKEN', '')
 HAS_API = bool(HF_API_TOKEN)
-HF_HEADERS = {"Authorization": f"Bearer {HF_API_TOKEN}"}
+hf_client    = InferenceClient(provider="hf-inference", api_key=HF_API_TOKEN) if HAS_API else None
+openai_client = OpenAI(base_url="https://router.huggingface.co/v1", api_key=HF_API_TOKEN) if HAS_API else None
 
 if not HAS_API:
     logger.warning("HF_API_TOKEN not set — AI features will be disabled.")
@@ -103,84 +106,54 @@ def get_file_hash(file_path):
 
 # ── HF Inference API ──────────────────────────────────────────────────────────
 
-def _hf_request(url, image_bytes, as_json=False):
-    """Direct HTTP call to HF Inference API. Retries on 503 model-loading responses."""
-    headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
-    if as_json:
-        import base64
-        headers["Content-Type"] = "application/json"
-        payload = json.dumps({"inputs": base64.b64encode(image_bytes).decode()}).encode()
-    else:
-        headers["Content-Type"] = "application/octet-stream"
-        payload = image_bytes
-
-    for attempt in range(4):
-        try:
-            resp = req_lib.post(url, headers=headers, data=payload, timeout=60)
-            logger.info(f"HF {url.split('/')[-1]} status={resp.status_code}")
-            if resp.status_code == 503:
-                wait = 20
-                try:
-                    wait = min(resp.json().get("estimated_time", 20) + 5, 40)
-                except Exception:
-                    pass
-                logger.info(f"Model loading, waiting {wait}s...")
-                time.sleep(wait)
-                continue
-            resp.raise_for_status()
-            result = resp.json()
-            # 200 but still loading
-            if isinstance(result, dict) and "error" in result:
-                logger.info(f"HF loading response: {result}")
-                time.sleep(20)
-                continue
-            return result
-        except req_lib.exceptions.HTTPError as e:
-            logger.error(f"HF HTTP error attempt {attempt+1}: {e}")
-            if attempt < 3:
-                time.sleep(5)
-        except Exception as e:
-            logger.error(f"HF error attempt {attempt+1}: {e}", exc_info=True)
-            if attempt < 3:
-                time.sleep(5)
-    return None
-
 def generate_caption(image_bytes):
+    """Caption via HF router vision LLM (OpenAI-compatible chat endpoint)."""
     if not HAS_API:
         return "AI unavailable — HF_API_TOKEN not configured."
-    # BLIP accepts raw bytes with octet-stream
-    url = "https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-base"
-    result = _hf_request(url, image_bytes, as_json=False)
-    logger.info(f"Caption result: {repr(result)}")
-    if isinstance(result, list) and result:
-        return result[0].get("generated_text", "No caption generated.")
-    return "Could not generate caption."
+    try:
+        b64 = base64.b64encode(image_bytes).decode()
+        mime = "image/png" if image_bytes[:8] == b'\x89PNG\r\n\x1a\n' else "image/jpeg"
+        # meta-llama/Llama-3.2-11B-Vision-Instruct supports image-text-to-text on hf-inference
+        completion = openai_client.chat.completions.create(
+            model="meta-llama/Llama-3.2-11B-Vision-Instruct:hf-inference",
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
+                    {"type": "text", "text": "Describe this image in one concise sentence."}
+                ]
+            }],
+            max_tokens=80
+        )
+        caption = completion.choices[0].message.content.strip()
+        logger.info(f"Caption: {caption}")
+        return caption
+    except Exception as e:
+        logger.error(f"Caption error: {e}", exc_info=True)
+        return "Could not generate caption."
 
 def detect_objects(image_bytes):
+    """Object detection via InferenceClient hf-inference provider."""
     if not HAS_API:
         return []
-    # DETR requires base64 JSON payload
-    url = "https://api-inference.huggingface.co/models/facebook/detr-resnet-50"
-    result = _hf_request(url, image_bytes, as_json=True)
-    logger.info(f"Detection result: {repr(result)}")
-    if not isinstance(result, list):
-        return []
-    objects = []
-    for item in result:
-        try:
-            score = float(item.get("score", 0))
+    try:
+        result = hf_client.object_detection(image_bytes, model="facebook/detr-resnet-50")
+        logger.info(f"Detection: {result}")
+        objects = []
+        for item in result:
+            score = float(item.score)
             if score < 0.5:
                 continue
-            b = item.get("box", {})
+            box = item.box
             objects.append({
-                "label":      str(item.get("label", "unknown")),
+                "label":      str(item.label),
                 "confidence": round(score, 2),
-                "box":        [int(b.get("xmin",0)), int(b.get("ymin",0)),
-                               int(b.get("xmax",0)), int(b.get("ymax",0))]
+                "box":        [int(box.xmin), int(box.ymin), int(box.xmax), int(box.ymax)]
             })
-        except Exception as e:
-            logger.warning(f"Skipping item {item}: {e}")
-    return objects[:10]
+        return objects[:10]
+    except Exception as e:
+        logger.error(f"Detection error: {e}", exc_info=True)
+        return []
 
 
 # ── Local image processing (lightweight, no torch) ────────────────────────────
