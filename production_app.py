@@ -33,8 +33,9 @@ logger = logging.getLogger(__name__)
 # HF Inference API config
 HF_API_TOKEN = os.environ.get('HF_API_TOKEN', '')
 HF_HEADERS   = {"Authorization": f"Bearer {HF_API_TOKEN}"}
-HF_CAPTION_URL = "https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-base"
-HF_DETECT_URL  = "https://api-inference.huggingface.co/models/facebook/detr-resnet-50"
+# New HF Inference API URLs (v2 router — old /models/ endpoints return 410)
+HF_CAPTION_URL = "https://router.huggingface.co/hf-inference/models/Salesforce/blip-image-captioning-base"
+HF_DETECT_URL  = "https://router.huggingface.co/hf-inference/models/facebook/detr-resnet-50"
 HAS_API = bool(HF_API_TOKEN)
 
 if not HAS_API:
