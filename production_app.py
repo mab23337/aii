@@ -22,6 +22,7 @@ from collections import Counter
 import re
 import requests as req_lib
 from huggingface_hub import InferenceClient
+from openai import OpenAI
 
 # Configure logging
 logging.basicConfig(
@@ -34,7 +35,8 @@ logger = logging.getLogger(__name__)
 # HF Inference API config
 HF_API_TOKEN = os.environ.get('HF_API_TOKEN', '')
 HAS_API = bool(HF_API_TOKEN)
-hf_client    = InferenceClient(provider="hf-inference", api_key=HF_API_TOKEN) if HAS_API else None
+hf_client     = InferenceClient(provider="hf-inference", api_key=HF_API_TOKEN) if HAS_API else None
+openai_client = OpenAI(base_url="https://router.huggingface.co/v1", api_key=HF_API_TOKEN) if HAS_API else None
 
 if not HAS_API:
     logger.warning("HF_API_TOKEN not set — AI features will be disabled.")
@@ -116,30 +118,29 @@ def _resize_for_api(image_bytes, max_side=800):
     return buf.getvalue()
 
 def generate_caption(image_bytes):
-    """Caption via InferenceClient image_to_text — same approach as working detection."""
+    """Caption via OpenAI-compatible vision LLM on HF router."""
     if not HAS_API:
         return "AI unavailable — HF_API_TOKEN not configured."
-    tmp_path = None
     try:
         small = _resize_for_api(image_bytes, max_side=800)
-        import tempfile
-        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-            tmp.write(small)
-            tmp_path = tmp.name
-        result = hf_client.image_to_text(tmp_path, model="nlpconnect/vit-gpt2-image-captioning")
-        logger.info(f"Caption result: {repr(result)}")
-        if isinstance(result, str) and result.strip():
-            return result.strip()
-        if isinstance(result, list) and result:
-            first = result[0]
-            return first.get("generated_text", "").strip() if isinstance(first, dict) else str(first).strip()
-        return "No caption generated."
+        b64 = base64.b64encode(small).decode()
+        completion = openai_client.chat.completions.create(
+            model="CohereLabs/aya-vision-32b:cohere",
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
+                    {"type": "text", "text": "Describe this image in one concise sentence."}
+                ]
+            }],
+            max_tokens=80
+        )
+        caption = completion.choices[0].message.content.strip()
+        logger.info(f"Caption: {caption}")
+        return caption
     except Exception as e:
         logger.error(f"Caption error: {e}", exc_info=True)
         return "Could not generate caption."
-    finally:
-        if tmp_path and os.path.exists(tmp_path):
-            os.remove(tmp_path)
 
 def detect_objects(image_bytes):
     """Object detection via InferenceClient — save to temp file to avoid mime-type bug."""
