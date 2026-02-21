@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 # HF Inference API config
 HF_API_TOKEN = os.environ.get('HF_API_TOKEN', '')
 HAS_API = bool(HF_API_TOKEN)
-hf_client = InferenceClient(provider="hf-inference", api_key=HF_API_TOKEN) if HAS_API else None
+hf_client = InferenceClient(token=HF_API_TOKEN) if HAS_API else None
 
 if not HAS_API:
     logger.warning("HF_API_TOKEN not set — AI features will be disabled.")
