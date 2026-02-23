@@ -48,6 +48,11 @@
             font-size: 20px;
             letter-spacing: -0.5px;
         }
+        .header p {
+            color: var(--text-dim);
+            font-size: 13px;
+            margin-left: auto;
+        }
         .sidebar-toggle {
             background: none;
             border: 1px solid var(--border);
@@ -65,6 +70,7 @@
         .layout {
             display: flex;
             flex: 1;
+            position: relative;
             overflow: hidden;
         }
 
@@ -84,12 +90,13 @@
             min-width: 0;
             transform: translateX(-100%);
         }
+
         .sidebar-header {
             padding: 16px;
             border-bottom: 1px solid var(--border);
             display: flex;
             align-items: center;
-            gap: 8px;
+            justify-content: space-between;
         }
         .sidebar-header h2 {
             font-family: 'JetBrains Mono', monospace;
@@ -106,8 +113,8 @@
             border-radius: 20px;
             font-family: 'JetBrains Mono', monospace;
         }
+
         .sidebar-clear {
-            margin-left: auto;
             background: none;
             border: 1px solid #444;
             color: var(--text-dim);
@@ -126,6 +133,7 @@
             padding: 8px;
         }
         .history-list::-webkit-scrollbar { width: 4px; }
+        .history-list::-webkit-scrollbar-track { background: var(--bg2); }
         .history-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
         .history-empty {
@@ -160,7 +168,11 @@
             flex-shrink: 0;
             background: var(--bg4);
         }
-        .history-info { flex: 1; overflow: hidden; }
+
+        .history-info {
+            flex: 1;
+            overflow: hidden;
+        }
         .history-caption {
             font-size: 12px;
             line-height: 1.4;
@@ -185,6 +197,7 @@
             border-radius: 3px;
             margin-top: 4px;
         }
+
         .history-delete {
             position: absolute;
             top: 6px;
@@ -197,11 +210,12 @@
             padding: 2px 4px;
             border-radius: 3px;
             transition: 0.15s;
+            line-height: 1;
         }
         .history-item:hover .history-delete { color: var(--text-dim); }
         .history-delete:hover { background: #ff444422; color: #ff4444 !important; }
 
-        /* MAIN */
+        /* MAIN CONTENT */
         .main {
             flex: 1;
             padding: 28px;
@@ -211,7 +225,7 @@
         .main::-webkit-scrollbar { width: 4px; }
         .main::-webkit-scrollbar-thumb { background: var(--border); }
 
-        /* UPLOAD */
+        /* UPLOAD AREA */
         .upload-area {
             border: 2px dashed var(--border);
             padding: 48px 40px;
@@ -269,12 +283,17 @@
         .preview-info p { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
 
         /* LOADING */
-        #loading { display: none; text-align: center; padding: 60px 20px; }
+        #loading {
+            display: none;
+            text-align: center;
+            padding: 60px 20px;
+        }
         .spinner {
             border: 3px solid var(--border);
             border-top: 3px solid var(--accent);
             border-radius: 50%;
-            width: 44px; height: 44px;
+            width: 44px;
+            height: 44px;
             animation: spin 0.8s linear infinite;
             margin: 0 auto 20px;
         }
@@ -285,7 +304,7 @@
         /* RESULTS */
         .results { display: none; }
         .results.active { display: block; animation: fadeIn 0.3s ease; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
         .results-header {
             display: flex;
@@ -295,8 +314,16 @@
             padding-bottom: 16px;
             border-bottom: 1px solid var(--border);
         }
-        .results-header h2 { font-family: 'JetBrains Mono', monospace; color: var(--accent); font-size: 16px; }
-        .results-time { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-dim); }
+        .results-header h2 {
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--accent);
+            font-size: 16px;
+        }
+        .results-time {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: var(--text-dim);
+        }
 
         .results-grid {
             display: grid;
@@ -322,6 +349,7 @@
             font-family: 'JetBrains Mono', monospace;
         }
         .result-card img { width: 100%; border-radius: 4px; border: 1px solid var(--border); }
+
         #caption { font-size: 15px; line-height: 1.7; color: var(--text); }
 
         .object-item {
@@ -336,10 +364,19 @@
         }
         .object-label { color: var(--text); }
         .object-conf { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--accent); }
-        .conf-bar { height: 3px; background: var(--border); border-radius: 2px; margin-top: 5px; }
+        .conf-bar {
+            height: 3px;
+            background: var(--border);
+            border-radius: 2px;
+            margin-top: 5px;
+        }
         .conf-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.5s ease; }
 
-        #colors { display: flex; flex-wrap: wrap; gap: 8px; }
+        #colors {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
         .color-chip {
             display: flex;
             align-items: center;
@@ -349,10 +386,10 @@
             border-radius: 4px;
             font-size: 12px;
             font-family: 'JetBrains Mono', monospace;
-            text-transform: capitalize;
         }
         .color-swatch {
-            width: 14px; height: 14px;
+            width: 14px;
+            height: 14px;
             border-radius: 3px;
             border: 1px solid rgba(255,255,255,0.15);
         }
@@ -365,6 +402,7 @@
     </div>
 
     <div class="layout">
+        <!-- SIDEBAR -->
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <h2>History</h2>
@@ -379,12 +417,13 @@
             </div>
         </aside>
 
+        <!-- MAIN -->
         <main class="main">
             <div class="upload-area" id="dropArea">
                 <div class="icon">📸</div>
                 <h3>Upload an Image</h3>
                 <p>Click to browse or drag & drop a file</p>
-                <p style="margin-top:6px">JPG, PNG · Max 10MB</p>
+                <p style="margin-top:6px">JPG, PNG · Max 10MB · Processing 30–60s on Raspberry Pi</p>
                 <input type="file" id="fileInput" accept="image/jpeg,image/png">
             </div>
 
@@ -404,7 +443,7 @@
             <div id="loading">
                 <div class="spinner"></div>
                 <h3>Analyzing image…</h3>
-                <p>Usually 5–15 seconds. Please wait…</p>
+                <p>30–60 seconds on Raspberry Pi. Hang tight!</p>
             </div>
 
             <div class="results" id="results">
@@ -412,22 +451,35 @@
                     <h2>✓ Analysis Complete</h2>
                     <span class="results-time" id="time"></span>
                 </div>
+
                 <div class="results-grid">
                     <div class="result-card full">
                         <h3>Original Image</h3>
                         <img id="originalImage" alt="Analyzed image">
                     </div>
+
                     <div class="result-card full">
                         <h3>AI Caption</h3>
                         <p id="caption"></p>
                     </div>
+
                     <div class="result-card">
                         <h3>Detected Objects</h3>
                         <div id="objects"></div>
                     </div>
+
                     <div class="result-card">
                         <h3>Primary Colors</h3>
                         <div id="colors"></div>
+                    </div>
+
+                    <div class="result-card full">
+                        <h3>Download Results</h3>
+                        <div style="display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap;">
+                            <button class="btn" onclick="downloadResults('txt')" style="flex: 1; min-width: 150px;">📄 Download TXT</button>
+                            <button class="btn" onclick="downloadResults('json')" style="flex: 1; min-width: 150px;">📊 Download JSON</button>
+                            <button class="btn" onclick="playAudioReadout()" style="flex: 1; min-width: 150px;">🔊 Audio Readout</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -435,34 +487,34 @@
     </div>
 
     <script>
-        // ---- State (in-memory only — no localStorage for images) ----
+        // ---- State ----
         let selectedFile = null;
+        let history = JSON.parse(localStorage.getItem('imgHistory') || '[]');
         let activeHistoryId = null;
-        // History stored in memory this session; only metadata (no image bytes) persisted
-        let history = [];
-        try {
-            history = JSON.parse(sessionStorage.getItem('imgHistory') || '[]');
-        } catch(e) { history = []; }
+        let currentResults = null; // Store current results for downloads
 
         // ---- Elements ----
-        const dropArea     = document.getElementById('dropArea');
-        const fileInput    = document.getElementById('fileInput');
-        const uploadBtn    = document.getElementById('uploadBtn');
-        const clearBtn     = document.getElementById('clearBtn');
-        const loading      = document.getElementById('loading');
-        const preview      = document.getElementById('preview');
-        const results      = document.getElementById('results');
-        const sidebar      = document.getElementById('sidebar');
+        const dropArea = document.getElementById('dropArea');
+        const fileInput = document.getElementById('fileInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const loading = document.getElementById('loading');
+        const preview = document.getElementById('preview');
+        const results = document.getElementById('results');
+        const sidebar = document.getElementById('sidebar');
         const sidebarToggle = document.getElementById('sidebarToggle');
-        const historyList  = document.getElementById('historyList');
+        const historyList = document.getElementById('historyList');
         const historyCount = document.getElementById('historyCount');
 
-        // ---- Sidebar ----
+        // ---- Sidebar Toggle ----
         sidebarToggle.onclick = () => sidebar.classList.toggle('collapsed');
 
-        // ---- File handling ----
+        // ---- File Handling ----
         dropArea.onclick = () => fileInput.click();
-        fileInput.onchange = (e) => { if (e.target.files.length > 0) handleFile(e.target.files[0]); };
+
+        fileInput.onchange = (e) => {
+            if (e.target.files.length > 0) handleFile(e.target.files[0]);
+        };
 
         function handleFile(file) {
             selectedFile = file;
@@ -504,12 +556,6 @@
 
             try {
                 const response = await fetch('/upload', { method: 'POST', body: formData });
-
-                const contentType = response.headers.get('content-type') || '';
-                if (!contentType.includes('application/json')) {
-                    throw new Error(`Server error (${response.status}) — please try again.`);
-                }
-
                 const data = await response.json();
 
                 if (data.success) {
@@ -528,12 +574,10 @@
             }
         };
 
-        // ---- Display results ----
         function displayResults(data) {
-            if (data.original_image) {
-                document.getElementById('originalImage').src = data.original_image;
-            }
-            document.getElementById('caption').textContent = data.caption || 'No caption available.';
+            currentResults = data; // Store for downloads
+            document.getElementById('originalImage').src = data.original_image;
+            document.getElementById('caption').textContent = data.caption;
             document.getElementById('time').textContent = `⏱ ${data.processing_time}s`;
 
             const objectsDiv = document.getElementById('objects');
@@ -546,7 +590,8 @@
                             <span class="object-label">${obj.label}</span>
                             <span class="object-conf">${conf}%</span>
                         </div>
-                        <div class="conf-bar"><div class="conf-fill" style="width:${conf}%"></div></div>`;
+                        <div class="conf-bar"><div class="conf-fill" style="width:${conf}%"></div></div>
+                    `;
                 });
             } else {
                 objectsDiv.innerHTML = '<p style="color:var(--text-dim);font-size:13px">No objects detected</p>';
@@ -554,18 +599,11 @@
 
             const colorsDiv = document.getElementById('colors');
             colorsDiv.innerHTML = '';
-            // Color name → approximate CSS color for the swatch
-            const colorMap = {
-                red:'#e74c3c', orange:'#e67e22', yellow:'#f1c40f', green:'#2ecc71',
-                cyan:'#1abc9c', blue:'#3498db', purple:'#9b59b6', pink:'#e91e8c',
-                black:'#111', gray:'#888', grey:'#888', white:'#eee'
-            };
             if (data.colors && data.colors.length > 0) {
                 data.colors.forEach(c => {
-                    const swatch = colorMap[c.toLowerCase()] || c;
                     colorsDiv.innerHTML += `
                         <div class="color-chip">
-                            <div class="color-swatch" style="background:${swatch}"></div>
+                            <div class="color-swatch" style="background:${c}"></div>
                             ${c}
                         </div>`;
                 });
@@ -576,24 +614,21 @@
             results.classList.add('active');
         }
 
-        // ---- History (sessionStorage — clears on tab close, no quota issues) ----
+        // ---- History ----
         function saveToHistory(data) {
             const entry = {
                 id: Date.now(),
                 timestamp: new Date().toLocaleString(),
+                thumb: data.original_image,
                 caption: data.caption,
                 objects: data.objects || [],
                 colors: data.colors || [],
                 processing_time: data.processing_time,
-                original_image: data.original_image  // kept in memory only
+                original_image: data.original_image
             };
             history.unshift(entry);
-            if (history.length > 20) history = history.slice(0, 20);
-
-            // Save to sessionStorage without image bytes to avoid quota errors
-            const slim = history.map(h => ({...h, original_image: null}));
-            try { sessionStorage.setItem('imgHistory', JSON.stringify(slim)); } catch(e) {}
-
+            if (history.length > 50) history = history.slice(0, 50);
+            localStorage.setItem('imgHistory', JSON.stringify(history));
             activeHistoryId = entry.id;
             renderHistory();
         }
@@ -609,21 +644,17 @@
                 return;
             }
             historyList.innerHTML = history.map(item => `
-                <div class="history-item ${item.id === activeHistoryId ? 'active' : ''}"
+                <div class="history-item ${item.id === activeHistoryId ? 'active' : ''}" 
                      data-id="${item.id}" onclick="loadHistoryItem(${item.id})">
-                    ${item.original_image
-                        ? `<img class="history-thumb" src="${item.original_image}" alt="">`
-                        : `<div class="history-thumb"></div>`}
+                    <img class="history-thumb" src="${item.thumb}" alt="">
                     <div class="history-info">
                         <div class="history-caption">${item.caption || 'No caption'}</div>
                         <div class="history-meta">${item.timestamp}</div>
-                        ${item.objects.length > 0
-                            ? `<span class="history-obj-count">${item.objects.length} object${item.objects.length > 1 ? 's' : ''}</span>`
-                            : ''}
+                        ${item.objects.length > 0 ? `<span class="history-obj-count">${item.objects.length} object${item.objects.length > 1 ? 's' : ''}</span>` : ''}
                     </div>
                     <button class="history-delete" onclick="deleteHistoryItem(event, ${item.id})">✕</button>
-                </div>`
-            ).join('');
+                </div>
+            `).join('');
         }
 
         function loadHistoryItem(id) {
@@ -637,13 +668,14 @@
             loading.style.display = 'none';
             displayResults({ ...item, success: true });
             renderHistory();
+            // scroll main into view on mobile
             document.querySelector('.main').scrollTop = 0;
         }
 
         function deleteHistoryItem(e, id) {
             e.stopPropagation();
             history = history.filter(h => h.id !== id);
-            try { sessionStorage.setItem('imgHistory', JSON.stringify(history.map(h => ({...h, original_image: null})))); } catch(e) {}
+            localStorage.setItem('imgHistory', JSON.stringify(history));
             if (activeHistoryId === id) {
                 activeHistoryId = null;
                 results.classList.remove('active');
@@ -654,7 +686,7 @@
         document.getElementById('clearHistoryBtn').onclick = () => {
             if (!confirm('Clear all history?')) return;
             history = [];
-            sessionStorage.removeItem('imgHistory');
+            localStorage.setItem('imgHistory', JSON.stringify(history));
             activeHistoryId = null;
             results.classList.remove('active');
             renderHistory();
@@ -664,7 +696,7 @@
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(e => {
             dropArea.addEventListener(e, evt => { evt.preventDefault(); evt.stopPropagation(); });
         });
-        dropArea.addEventListener('dragover',  () => dropArea.classList.add('drag-over'));
+        dropArea.addEventListener('dragover', () => dropArea.classList.add('drag-over'));
         dropArea.addEventListener('dragleave', () => dropArea.classList.remove('drag-over'));
         dropArea.addEventListener('drop', e => {
             dropArea.classList.remove('drag-over');
@@ -674,6 +706,104 @@
 
         // ---- Init ----
         renderHistory();
+
+        // ---- Download Results ----
+        function downloadResults(format) {
+            if (!currentResults) {
+                alert('No results to download. Please analyze an image first.');
+                return;
+            }
+
+            fetch(`/download/${format}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(currentResults)
+            })
+            .then(response => {
+                if (!response.ok) throw new Error('Download failed');
+                return response.blob();
+            })
+            .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `analysis.${format}`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            })
+            .catch(error => {
+                console.error('Download error:', error);
+                alert('Failed to download results. Please try again.');
+            });
+        }
+
+        // ---- Audio Readout ----
+        function playAudioReadout() {
+            if (!currentResults) {
+                alert('No results to read. Please analyze an image first.');
+                return;
+            }
+
+            // Check if browser supports speech synthesis
+            if (!('speechSynthesis' in window)) {
+                alert('Audio readout is not supported in your browser.');
+                return;
+            }
+
+            // Build text to speak
+            let text = 'Analysis results. ';
+            
+            // Add caption
+            if (currentResults.caption) {
+                text += currentResults.caption + '. ';
+            }
+            
+            // Add detected objects
+            if (currentResults.objects && currentResults.objects.length > 0) {
+                text += `Detected ${currentResults.objects.length} object${currentResults.objects.length > 1 ? 's' : ''}. `;
+                currentResults.objects.slice(0, 5).forEach((obj) => {
+                    const confidence = Math.round(obj.confidence * 100);
+                    text += `${obj.label} with ${confidence} percent confidence. `;
+                });
+            }
+            
+            // Add colors
+            if (currentResults.colors && currentResults.colors.length > 0) {
+                text += `Primary colors are ${currentResults.colors.join(', ')}. `;
+            }
+            
+            // Add processing time
+            if (currentResults.processing_time) {
+                text += `Processing took ${currentResults.processing_time} seconds.`;
+            }
+
+            // Stop any ongoing speech
+            speechSynthesis.cancel();
+
+            // Create and speak utterance
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 0.9;  // Slightly slower for clarity
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+            
+            // Optional: Show feedback
+            utterance.onstart = () => {
+                console.log('Audio readout started');
+            };
+            
+            utterance.onend = () => {
+                console.log('Audio readout finished');
+            };
+            
+            utterance.onerror = (event) => {
+                console.error('Audio readout error:', event);
+                alert('Audio readout failed. Please try again.');
+            };
+
+            speechSynthesis.speak(utterance);
+        }
     </script>
 </body>
 </html>
